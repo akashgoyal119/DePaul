@@ -12,7 +12,7 @@ import csv
 
 results = 9999
 
-#USE SELENIUM TO GET ALL THE website infos...
+#USE SELENIUM TO GET ALL THE website info
 driver = webdriver.Chrome()
 driver.get('https://www.zenodo.org/search?page=1&size='+str(results))
 element = WebDriverWait(driver,60).until(EC.presence_of_element_located((By.TAG_NAME,"h4")))
@@ -32,10 +32,9 @@ else:
 url_list = []
 for url in all_urls:
 	children = url.findChildren()[0]
-	url_list.append('https://www.zenodo.org'+children.get('href'))#+'#BS')
+	url_list.append('https://www.zenodo.org'+children.get('href'))
 
-driver.quit() #have to use driver.quit instead of driver.close for some 
-#reason.... 
+driver.quit() #have to use driver.quit instead of driver.close 
 
 with open('Andy-wordscraper.txt','w') as f_out:
 	csv_writer = csv.writer(f_out,delimiter=',')
@@ -89,5 +88,4 @@ with open('Andy-wordscraper.txt','w') as f_out:
 		items.append(author_list)
 
 		csv_writer.writerow(items)
-		#print (items)
 
