@@ -17,18 +17,19 @@ import stat
 import os
 from pathlib import Path
 
+#delete open later...
 options = ['OPEN (or switch) project',
 		   'EXEC- execute a specific file (not necessarily) in the project',
 		   'REPEAT- re-run a specific job in the project',
-		   'SHOW- show the displayed details of the last captured execution',
+		   'SHOW- show the displayed details of a specific execution',
 		   'RM- delete a specific job',
 		   'LIST- show all the jobs available']
 
 class MyWizard(QtWidgets.QWizard):
-	def __init__(self):
+	def __init__(self,mainW):
 		super().__init__()
+		self.mainW = mainW
 		self.start_wizard()
-		self.show()
 
 	# This function is called every time the user hits "next"
 	def initializePage(self,pageNumber):
@@ -41,28 +42,23 @@ class MyWizard(QtWidgets.QWizard):
 
 		elif pageNumber == 2:
 			self.option_selected = self.options[self.page(pageNumber-1).field("functionName")]
-			
-			#now you have everything you need to do, so run the logic. 
-			if self.option_selected == options[0]:
-				subprocess.run(['sciunit','open',self.project_selected])
+			subprocess.run(['sciunit','open',self.project_selected])
+
+			#list 
+			if self.option_selected == options[0]:	
 				print ('you are done now')
 			
 			#exec
 			elif self.option_selected == options[1]:
-				subprocess.run(['sciunit','open',self.project_selected])
+				self.page(pageNumber).setTitle("File Selection")
+				self.page(pageNumber).setSubTitle("Choose an executable file")
+				uploader = QtWidgets.QPushButton(self)
+				name = QtWidgets.QFileDialog.getOpenFileName(uploader,'Choose File to Run')
+				subprocess.run(['sciunit','exec',name[0]])
 
-				program = './'+PROGRAMSELECTED
-				subprocess.run(['sciunit','exec',program])
-				print ('you just finished running the program, '+PROGRAMSELECTED)
-
-			#show
-			elif self.option_selected == options[3]:
-				pass 
-
-			#repeat, rm, list
+			#repeat, show, rm, list
 			else:
 				#first open the relevant project, then list all the process IDs
-				subprocess.run(['sciunit','open',self.project_selected])
 				result = subprocess.run(['sciunit','list'],stdout=subprocess.PIPE)
 				cleaned_list = result.stdout.decode('utf-8').split('\n')
 				del cleaned_list[-1] #get rid of white-space
@@ -82,22 +78,30 @@ class MyWizard(QtWidgets.QWizard):
 				self.page(pageNumber).setLayout(layout)
 				self.page(pageNumber).registerField("job",comboBox_jobs)
 
-		#repeat, rm, or list was selected
+		#repeat, rm, or show was selected
 		elif pageNumber == 3:
-			job_selected = self.process_numbers_dict[self.page(pageNumber-1).field("job")]
-			# if it was a repeat job, then call repeat
+			try:
+				job_selected = self.process_numbers_dict[self.page(pageNumber-1).field("job")]
+			#if you chose list or open then you can't choose a job, hence there will be attribute error
+			except AttributeError as e:
+				pass
+
 			if self.option_selected == options[2]:
 				subprocess.run(['sciunit','repeat',job_selected])
+
+			elif self.option_selected == options[3]:
+				subprocess.run(['sciunit','show',job_selected])
+
 			elif self.option_selected == options[4]:
 				subprocess.run(['sciunit','rm',job_selected])
 				print ('You have deleted job '+str(job_selected))
-		
+
 	#see github.com/baoboa/pyqt5/blob/master/examples/dialogs/trivialwizard
 	def start_wizard(self):
 		
 		def project_name():
 			page = QtWidgets.QWizardPage()
-			page.setTitle("Project")
+			page.setTitle("Project Name")
 			page.setSubTitle("Please select one of the available projects below")
 
 			# get all the projects and then store index as key and the project name as the value
@@ -117,12 +121,6 @@ class MyWizard(QtWidgets.QWizard):
 			page = QtWidgets.QWizardPage()
 			page.setTitle("Sciunit Function Type")
 			page.setSubTitle("Please select the command you wish to run")
-			options = ['OPEN (or switch) project',
-					   'EXEC- execute a specific file (not necessarily) in the project',
-					   'REPEAT- re-run a specific job in the project',
-					   'SHOW- show the displayed details of the last captured execution',
-					   'RM- delete a specific job',
-					   'LIST- show all the jobs available']
 			self.options = {key:value for key,value in enumerate(options)}
 			#create drop down
 			comboBox_func = QtWidgets.QComboBox(self)
@@ -140,8 +138,7 @@ class MyWizard(QtWidgets.QWizard):
 
 		def finish():
 			page = QtWidgets.QWizardPage()
-			page.setTitle("You have reached the end")
-			page.setSubTitle("Click back to start over")
+			page.setTitle("You have reached the end, click finish")
 			return page
 
 		self.addPage(project_name())
@@ -149,7 +146,36 @@ class MyWizard(QtWidgets.QWizard):
 		self.addPage(task_name())
 		self.addPage(finish())
 		self.setWindowTitle("Sciunit helper")
+
+
+#This is the main window that opens at the beginning
+class Window (QtWidgets.QMainWindow,Ui_MainWindow):
+	def __init__(self):
+		super().__init__()
+		self.setupUi(self)
+		self.add_connectivity()
+		self.wiz = MyWizard(self)
+		self.setWindowTitle("Sciunit helper")
 		self.show()
+
+	def add_connectivity(self):
+		self.wizardBtn.clicked.connect(self.start_wizard)
+		self.actionCreate.triggered.connect(self.create_project)
+		self.createBtn.clicked.connect(self.create_project)
+
+	def create_project(self):
+		name, okPressed = QtWidgets.QInputDialog.getText(self,"New Project",
+														"Enter a project name: ",
+														QtWidgets.QLineEdit.Normal,
+														"")
+		if okPressed and name:
+			old_result = subprocess.run(['sciunit','create',name],stdout=subprocess.PIPE)
+			result = old_result.stdout.decode('utf-8')
+			print (result)
+			self.textEdit.setText(result)
+
+	def start_wizard(self):
+		self.wiz.show()
 
 def get_projects():
 	home = str(Path.home()) #get home directory
@@ -163,48 +189,8 @@ def get_projects():
 
 def run():
 	app = QtWidgets.QApplication(sys.argv)
-	#GUI = Window()
-	a = MyWizard()
+	GUI = Window()
+	#a = MyWizard()
 	sys.exit(app.exec_())
 
 run()
-
-
-# THIS IS NOT USED FOR NOW- IGNORE EVERYTHING BELOW
-class Window (QtWidgets.QMainWindow,Ui_MainWindow):
-	def __init__(self):
-		super().__init__()
-		self.setupUi(self)
-		self.add_connectivity()
-		self.show()
-
-	def add_connectivity(self):
-		self.actionCreate.triggered.connect(self.create_project)
-
-		# this part finds a list of all available projects to open
-		home = str(Path.home()) #get home directory
-		p = Path(home+'/sciunit/')
-		for x in p.iterdir():
-			if os.path.isdir(str(x)):
-				proj = str(x).split('/')[-1] #get the folder name
-				self.availableProjects.addItem(proj)
-
-		self.openFile.triggered.connect(self.open_project)
-		self.availableProjects.activated.connect(self.open_project)
-		#self.wizardBtn.clicked.connect(self.start_wizard)
-
-	def create_project(self):
-		name, okPressed = QtWidgets.QInputDialog.getText(self,"New Project",
-														"Enter a project name: ",
-														QtWidgets.QLineEdit.Normal,
-														"")
-		if okPressed and name:
-			subprocess.run(['sciunit','create',name])
-
-	def open_project(self):
-		print (self.availableProjects.highlighted())
-
-	def get_version(self):
-		result = subprocess.run(['sciunit','--version'],stdout=subprocess.PIPE)
-		#from there we need to decode it into a human-readable string
-		print (result.stdout.decode('utf-8')[:-1])
