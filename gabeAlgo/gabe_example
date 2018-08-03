@@ -1,0 +1,20 @@
+P open A read
+P close A read
+P open B write
+P close B write
+P spawn Q
+Q open C read
+Q close C read
+Q open B read
+Q close B read
+P open B write
+P close B write
+P spawn R
+R open E read
+R close E read
+R open B read
+R close B read
+Q open D write
+Q close D write
+R open F write
+R close F write 
