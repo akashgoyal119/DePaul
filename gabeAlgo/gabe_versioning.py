@@ -15,12 +15,14 @@ class Graph:
         self.R = defaultdict(deque)
 
     def get_latest_version(self,a):
+        a = a[0]
         if not self.R[a]: self.add_new_version(a)
         return self.R[a][0]
 
     def add_new_version(self,a):
-        print('Adding {0} to {1}'.format(a, self.R[a]))
+        a = a[0]
         self.R[a].appendleft(a + str(len(self.R[a]) + 1))
+
 
     def open_read(self,p, f):
         self.connect(self.get_latest_version(f), self.get_latest_version(p))
@@ -72,6 +74,7 @@ class Graph:
         q = []
         q.append(s)
         previously_marked_vertices = []
+
         while q:
             s = q.pop(0)
             for adjacent_vertex in self.active_adjacencies[s]:
@@ -96,6 +99,7 @@ class Graph:
         return unmarked_vertices
 
     def disconnect(self,a,b):
+        print ('Disconnecting {0} to {1}'.format(a,b))
         self.deactivate_edge(a,b,edge_type='forward')
         self.deactivate_edge(a,b,edge_type='reversed')
 
@@ -106,14 +110,14 @@ class Graph:
             self._marked_vertices[u] = 'marked'
 
     def connect(self,a,b):
-        print('Connecting {0} to {1}'.format(a, b))
         M = self.forward_BFS(b)
-        print('M after bfs -> {0}'.format(M))
+        #print('M after bfs -> {0}'.format(M))
         if b in self._marked_vertices:
             print(self._marked_vertices)
             M.append(b)
 
         for m in M:
+            m = m[0]
             self.add_new_version(m)
 
         for m in M:
@@ -182,36 +186,37 @@ if __name__ == '__main__':
 #self._marked_vertices = {}
     G      = Graph()
     testop = 'test op {0} fails because "{1}"'
-    def testNext(testOpHandle):
+    def testNext(testOpHandle,num):
         tl = TestLine(testOpHandle.readline())
-        print('testing op ---> {0}'.format(tl.rawLine))
+        print('testing op {0} ---> {1}'.format(num,tl.rawLine))
         tl.execute(G)
 
-    with open('gabes20', 'r') as trHandle:
+    with open('gabe_example', 'r') as trHandle:
         # Test Op 1
-        testNext(trHandle)
+        testNext(trHandle,1)
         assert('P1' in G.active_adjacencies['A1']), testop.format(1, 'A does not have active edge to P when it should')
+        assert('P1' in G._reversed_active_adjacencies['A1']), testop.format(1,'A does not have reversed active edge to P when it should')
         assert('P1' not in G._marked_vertices), testop.format(1, 'P is marked but should not be marked')
         assert('A1' not in G._marked_vertices), testop.format(1, 'A is marked but should not be marked')
         # Test Op 2
-        testNext(trHandle)
+        testNext(trHandle,2)
         assert('P1' not in G.active_adjacencies['A1']), testop.format(2, 'A should no longer have an active edge to P')
         assert('P1' in G.deactivated_adjacencies['A1']), testop.format(2, 'A should have a decativated edge to P')
         assert('A1' in G._marked_vertices), testop.format(2, 'A should be marked')
         assert('P1' not in G._marked_vertices), testop.format(2, 'P should not be marked')
         # Test Op 3
-        testNext(trHandle)
+        testNext(trHandle,3)
         assert('B1' in G.active_adjacencies['P1']), testop.format(3, 'P should have an active edge to B')
         assert('P1' not in G._marked_vertices), testop.format(3, 'P is marked but should not be marked')
         assert('B1' not in G._marked_vertices), testop.format(3, 'B is marked but should not be marked')
         # Test Op 4
-        testNext(trHandle)
+        testNext(trHandle,4)
         assert('B1' not in G.active_adjacencies['P1']), testop.format(4, 'P should no longer have an active edge to B')
         assert('B1' in G.deactivated_adjacencies['P1']), testop.format(4, 'P should have a decativated edge to B')
         assert('P1' in G._marked_vertices), testop.format(4, 'P should be marked')
         assert('B1' not in G._marked_vertices), testop.format(4, 'B should not be marked')
         # Test Op 5
-        testNext(trHandle)
+        testNext(trHandle,5)
         assert('Q1' not in G.active_adjacencies['P1']), testop.format(5, 'P should no longer have an active edge to Q')
         assert('Q1' in G.deactivated_adjacencies['P1']), testop.format(5, 'P should have a deactivated edge to Q')
         assert('A1' in G._marked_vertices), testop.format(5, 'A should be marked')
@@ -219,12 +224,12 @@ if __name__ == '__main__':
         assert('B1' not in G._marked_vertices), testop.format(5, 'B should not be marked')
         assert('Q1' not in G._marked_vertices), testop.format(5, 'Q should not be marked')
         # Test Op 6
-        testNext(trHandle)
+        testNext(trHandle,6)
         assert('Q1' in G.active_adjacencies['C1']), testop.format(6, 'C does not have active edge to Q when it should')
         assert('Q1' not in G._marked_vertices), testop.format(6, 'Q is marked but should not be marked')
         assert('C1' not in G._marked_vertices), testop.format(6, 'C is marked but should not be marked')
         # Test Op 7
-        testNext(trHandle)
+        testNext(trHandle,7)
         assert('Q1' not in G.active_adjacencies['C1']), testop.format(7, 'C should no longer have an active edge to Q')
         assert('Q1' not in G.active_adjacencies['P1']), testop.format(7, 'C should not have an active edge to Q')
         assert('Q1' in G.deactivated_adjacencies['C1']), testop.format(7, 'C should have a decativated edge to Q')
@@ -235,7 +240,7 @@ if __name__ == '__main__':
         assert('B1' not in G._marked_vertices), testop.format(7, 'B should not be marked')
         assert('Q1' not in G._marked_vertices), testop.format(7, 'Q should not be marked')
         # Test Op 8
-        testNext(trHandle)
+        testNext(trHandle,8)
         assert('Q1' in G.active_adjacencies['B1']), testop.format(8, 'B should have an active adjacency to Q')
         assert('Q1' not in G.active_adjacencies['C1']), testop.format(8, 'C should no longer have an active edge to Q')
         assert('Q1' not in G.active_adjacencies['P1']), testop.format(8, 'C should not have an active edge to Q')
@@ -247,7 +252,7 @@ if __name__ == '__main__':
         assert('B1' not in G._marked_vertices), testop.format(8, 'B should not be marked')
         assert('Q1' not in G._marked_vertices), testop.format(8, 'Q should not be marked')
         # Test Op 9
-        testNext(trHandle)
+        testNext(trHandle,9)
         assert('Q1' not in G.active_adjacencies['B1']), testop.format(9, 'B should not have an active adjacency to Q')
         assert('Q1' in G.deactivated_adjacencies['B1']), testop.format(9, 'B should not have an active adjacency to Q')
         assert('Q1' not in G.active_adjacencies['C1']), testop.format(9, 'C should no longer have an active edge to Q')
@@ -259,8 +264,8 @@ if __name__ == '__main__':
         assert('P1' in G._marked_vertices), testop.format(9, 'P should be marked')
         assert('B1' in G._marked_vertices), testop.format(9, 'B should be marked')
         assert('Q1' not in G._marked_vertices), testop.format(9, 'Q should not be marked')
+
         # Test Op 10
-        testNext(trHandle)
-        print(G.R)
+        testNext(trHandle,10)
         bVer = G.get_latest_version('B')
         assert(bVer == 'B2'), testop.format(10, 'B2 should be the latest version not {0}'.format(bVer))
