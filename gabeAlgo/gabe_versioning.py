@@ -1,6 +1,10 @@
 from collections import defaultdict, deque
-from sys import exit 
 import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+#from test.TestUtil import *
+from gabe_versioning import *
+
 
 class Graph:
     def __init__(self):
@@ -123,19 +127,19 @@ class Graph:
         for m in M:
             m2 = self.get_latest_version(m)
             self.active_adjacencies = self.add_edge(m,m2,self.active_adjacencies)
-            self._reversed_active_adjacencies = self.add_edge(m,m2,self._reversed_active_adjacencies)
+            self._reversed_active_adjacencies = self.add_edge(m2,m,self._reversed_active_adjacencies)
 
             self.deactivate_edge(m,m2,edge_type='forward')
-            self.deactivate_edge(m,m2,edge_type='reversed')
+            self.deactivate_edge(m2,m,edge_type='reversed')
 
             # go through this portion of algo in 2 steps (1- forward adjacency, 2-backward adjacency)
             for y in self.active_adjacencies[m]:
                 self.deactivate_edge(m,y,edge_type='forward')
                 if y in M:
                     y2 = self.get_latest_version(y)
-                    self.active_adjacencies = self.add_edge(m2,y2)
+                    self.active_adjacencies = self.add_edge(m2,y2,self.active_adjacencies)
                 else:
-                    self.active_adjacencies = self.add_edge(m2,y)
+                    self.active_adjacencies = self.add_edge(m2,y,self.active_adjacencies)
 
             for x in self._reversed_active_adjacencies[m]:
                 self.deactivate_edge(m,x,edge_type='reversed')
@@ -153,286 +157,181 @@ class Graph:
         if b in M:
             b2 = self.get_latest_version(b)
         self.active_adjacencies = self.add_edge(a2,b2,self.active_adjacencies)
-        self._reversed_active_adjacencies = self.add_edge(a2,b2,self._reversed_active_adjacencies)
+        self._reversed_active_adjacencies = self.add_edge(b2,a2,self._reversed_active_adjacencies)
+
+class TestLine(object):
+    def __init__(self, rawLine):
+        self.rawLine = rawLine.strip()
+        tokens       = self.rawLine.split()
+        self.subject = tokens[0]
+        self.verb    = tokens[1]
+        self.object  = tokens[2]
+        self.modi    = tokens[3] if len(tokens) > 3 else ''
+
+    def execute(self, G):
+        cases = {
+                'openread':G.open_read,
+                'closeread': G.close_read,
+                'openwrite':G.open_write,
+                'closewrite':G.close_write,
+                'openreadwrite':G.open_read_write,
+                'closereadwrite':G.close_read_write,
+                'spawn':G.spawn,
+                }
+
+        cases[self.verb + self.modi](self.subject, self.object)
+
+def testNext(G,testOpHandle,num):
+    tl = TestLine(testOpHandle.readline())
+    print('testing op {0} ---> {1}'.format(num,tl.rawLine))
+    tl.execute(G)
+
+#ensure that all items in my list are in the graph's list as well
+def testGraphValidity(marked,active_adjacencies,inactive_adjacency,graph,versions={}):
+    # check if all marked vertices in the expected graph are in the actual graph
+    for vertex in marked:
+        if vertex not in graph._marked_vertices:
+            print (vertex+' was not in marked vertices when it should have been')
+            return False
+    # check if all marked vertices in the actual graph are marked in the expected graph
+    for vertex in graph._marked_vertices:
+        if vertex not in marked:
+            print ('failure- actual vertices were not in expected vertices')
+            return False
+
+    # check if all edges in the expected adjacencies are in the actual adjacencies 
+    for adj in active_adjacencies:
+        for vertex in active_adjacencies[adj]:
+            
+            if vertex not in graph.active_adjacencies[adj]:
+                print (f'error in edge from {adj} to {vertex}')
+                print (vertex+' was not in active adjacency when it should have')
+                return False
+
+    # check if all edges in the graph's adjacencies are in the expected adjacencies 
+    for adj in graph.active_adjacencies:
+        for vertex in graph.active_adjacencies[adj]:
+            if vertex not in active_adjacencies[adj]:
+                print ('failure: actual edges were not in expected edges')
+                print (graph.active_adjacencies)
+                print (graph.active_adjacencies[adj],active_adjacencies[adj])
+                return False 
+
+    # FIX THIS TOMORROW 
+    # check if all inactive edges in the expected graph are in the actual inactive edge graph
+    for adj in inactive_adjacency:
+        for vertex in inactive_adjacency[adj]:
+            if vertex not in graph.deactivated_adjacencies[adj]:
+                print (f'failure from edge {adj} to {vertex}')
+                print (vertex+' was not in deactivated_adjacencies when it should have been')
+                return False
+
+    # check if all deactivated edges in the actual graph are in the expected graph
+    for adj in graph.deactivated_adjacencies:
+        for vertex in graph.deactivated_adjacencies[adj]:
+            if vertex not in inactive_adjacency[adj]:
+                print (f'failure from edge of vertices {adj} to {vertex}')
+                print ('actual deactivated adjacencies not in expected')
+                return False
+
+    if versions and any([graph.R[v] != versions[v] for v in versions]):
+        print('Versions in graph do not match versions in assertion')
+        for v in versions:
+            print('Expected {0} : {1}'.format(v, versions[v]))
+            print('Found    {0} : {1}'.format(v, graph.R[v]))
+        return False
+
+    return True
+
 
 if __name__ == '__main__':
-    #pass
-    # WRITE OUT EXAMPLE CASE
-    class TestLine(object):
-        def __init__(self, rawLine):
-            self.rawLine = rawLine.strip()
-            tokens       = self.rawLine.split()
-            self.subject = tokens[0]
-            self.verb    = tokens[1]
-            self.object  = tokens[2]
-            self.modi    = tokens[3] if len(tokens) > 3 else ''
 
-        def execute(self, G):
-            cases = {
-                    'openread':G.open_read,
-                    'closeread': G.close_read,
-                    'openwrite':G.open_write,
-                    'closewrite':G.close_write,
-                    'openreadwrite':G.open_read_write,
-                    'closereadwrite':G.close_read_write,
-                    'spawn':G.spawn,
-                    }
-
-            cases[self.verb + self.modi](self.subject, self.object)
-#self.active_adjacencies = {}
-#self.deactivated_adjacencies = {}
-#self._reversed_active_adjacencies = {}
-#self._reversed_deactivated_adjacencies = {}
-#self._marked_vertices = {}
-    G      = Graph()
+    G = Graph()
     testop = 'test op {0} fails because "{1}"'
-    def testNext(testOpHandle,num):
-        tl = TestLine(testOpHandle.readline())
-        print('testing op {0} ---> {1}'.format(num,tl.rawLine))
-        tl.execute(G)
 
-    
-    with open('gabe_example', 'r') as trHandle:
+    with open('test/testCommands2', 'r') as trHandle:
         # Test Op 1
-        testNext(trHandle,1)
-        assert('P1' in G.active_adjacencies['A1']), testop.format(1, 'A does not have active edge to P when it should')
-        assert('P1' in G._reversed_active_adjacencies['A1']), testop.format(1,'A does not have reversed active edge to P when it should')
-        assert('P1' not in G._marked_vertices), testop.format(1, 'P is marked but should not be marked')
-        assert('A1' not in G._marked_vertices), testop.format(1, 'A is marked but should not be marked')
+        testNext(G, trHandle,1)
+        test_marked_vertices_1 = []
+        test_active_adjacencies_1 = {'A1':['P1']}
+        test_inactive_adjacencies_1 = {}
+
+        if not testGraphValidity(test_marked_vertices_1,test_active_adjacencies_1,test_inactive_adjacencies_1,G):
+            print ('Failure at step 1')
+            sys.exit()
+
         # Test Op 2
-        testNext(trHandle,2)
-        assert('P1' not in G.active_adjacencies['A1']), testop.format(2, 'A should no longer have an active edge to P')
-        assert('P1' in G.deactivated_adjacencies['A1']), testop.format(2, 'A should have a decativated edge to P')
-        assert('A1' in G._marked_vertices), testop.format(2, 'A should be marked')
-        assert('P1' not in G._marked_vertices), testop.format(2, 'P should not be marked')
+        testNext(G, trHandle,2)
+        test_marked_vertices_2 = []
+        test_active_adjacencies_2 = {'A1':['P1'],
+                                      'P1':['B1'],
+                                     }
+        test_inactive_adjacencies_2 = {}
+
+
+        if not testGraphValidity(test_marked_vertices_2,test_active_adjacencies_2,test_inactive_adjacencies_2,G):
+            print ('Failure at step 2')
+            sys.exit()
+
         # Test Op 3
-        testNext(trHandle,3)
-        assert('B1' in G.active_adjacencies['P1']), testop.format(3, 'P should have an active edge to B')
-        assert('P1' not in G._marked_vertices), testop.format(3, 'P is marked but should not be marked')
-        assert('B1' not in G._marked_vertices), testop.format(3, 'B is marked but should not be marked')
+        testNext(G, trHandle,3)
+        test_marked_vertices_3 = []
+        test_active_adjacencies_3 = {'A1':['P1'],
+                                     'P1':['B1', 'C1'],
+                                    }
+        test_inactive_adjacencies_3 = {}
+
+        if not testGraphValidity(test_marked_vertices_3,test_active_adjacencies_3,test_inactive_adjacencies_3,G):
+            print ('Failure at step 3')
+            sys.exit()
+
         # Test Op 4
-        testNext(trHandle,4)
-        assert('B1' not in G.active_adjacencies['P1']), testop.format(4, 'P should no longer have an active edge to B')
-        assert('B1' in G.deactivated_adjacencies['P1']), testop.format(4, 'P should have a decativated edge to B')
-        assert('P1' in G._marked_vertices), testop.format(4, 'P should be marked')
-        assert('B1' not in G._marked_vertices), testop.format(4, 'B should not be marked')
+        testNext(G, trHandle,4)
+        test_marked_vertices_4 = []
+        test_active_adjacencies_4 = {'A1':['P1'],
+                                     'P1':['B1', 'C1', 'D1'],
+                                    }
+        test_inactive_adjacencies_4 = {}
+
+        if not testGraphValidity(test_marked_vertices_4,test_active_adjacencies_4,test_inactive_adjacencies_4,G):
+            print ('Failure at step 4')
+            sys.exit()
+
         # Test Op 5
-        testNext(trHandle,5)
-        assert('Q1' not in G.active_adjacencies['P1']), testop.format(5, 'P should no longer have an active edge to Q')
-        assert('Q1' in G.deactivated_adjacencies['P1']), testop.format(5, 'P should have a deactivated edge to Q')
-        assert('A1' in G._marked_vertices), testop.format(5, 'A should be marked')
-        assert('P1' in G._marked_vertices), testop.format(5, 'P should be marked')
-        assert('B1' not in G._marked_vertices), testop.format(5, 'B should not be marked')
-        assert('Q1' not in G._marked_vertices), testop.format(5, 'Q should not be marked')
+        testNext(G, trHandle,5)
+        test_marked_vertices_5 = ['A1', 'P1']
+        test_active_adjacencies_5 = {'A1':['P1'],
+                                     'P1':['B1', 'C1'],
+                                    }
+        test_inactive_adjacencies_5 = {'P1':['D1']}
+
+        if not testGraphValidity(test_marked_vertices_5,test_active_adjacencies_5,test_inactive_adjacencies_5,G):
+            print ('Failure at step 5')
+            print (G._reversed_active_adjacencies['P1'])
+            sys.exit()
+
         # Test Op 6
-        testNext(trHandle,6)
-        assert('Q1' in G.active_adjacencies['C1']), testop.format(6, 'C does not have active edge to Q when it should')
-        assert('Q1' not in G._marked_vertices), testop.format(6, 'Q is marked but should not be marked')
-        assert('C1' not in G._marked_vertices), testop.format(6, 'C is marked but should not be marked')
-        # Test Op 7
-        testNext(trHandle,7)
-        assert('Q1' not in G.active_adjacencies['C1']), testop.format(7, 'C should no longer have an active edge to Q')
-        assert('Q1' not in G.active_adjacencies['P1']), testop.format(7, 'C should not have an active edge to Q')
-        assert('Q1' in G.deactivated_adjacencies['C1']), testop.format(7, 'C should have a decativated edge to Q')
-        assert('Q1' in G.deactivated_adjacencies['P1']), testop.format(7, 'P should have a decativated edge to Q')
-        assert('C1' in G._marked_vertices), testop.format(7, 'C should be marked')
-        assert('A1' in G._marked_vertices), testop.format(7, 'A should be marked')
-        assert('P1' in G._marked_vertices), testop.format(7, 'P should be marked')
-        assert('B1' not in G._marked_vertices), testop.format(7, 'B should not be marked')
-        assert('Q1' not in G._marked_vertices), testop.format(7, 'Q should not be marked')
-        # Test Op 8
-        testNext(trHandle,8)
-        assert('Q1' in G.active_adjacencies['B1']), testop.format(8, 'B should have an active adjacency to Q')
-        assert('Q1' not in G.active_adjacencies['C1']), testop.format(8, 'C should no longer have an active edge to Q')
-        assert('Q1' not in G.active_adjacencies['P1']), testop.format(8, 'C should not have an active edge to Q')
-        assert('Q1' in G.deactivated_adjacencies['C1']), testop.format(8, 'C should have a decativated edge to Q')
-        assert('Q1' in G.deactivated_adjacencies['P1']), testop.format(8, 'P should have a decativated edge to Q')
-        assert('C1' in G._marked_vertices), testop.format(8, 'C should be marked')
-        assert('A1' in G._marked_vertices), testop.format(8, 'A should be marked')
-        assert('P1' in G._marked_vertices), testop.format(8, 'P should be marked')
-        assert('B1' not in G._marked_vertices), testop.format(8, 'B should not be marked')
-        assert('Q1' not in G._marked_vertices), testop.format(8, 'Q should not be marked')
-        # Test Op 9
-        testNext(trHandle,9)
-        assert('Q1' not in G.active_adjacencies['B1']), testop.format(9, 'B should not have an active adjacency to Q')
-        assert('Q1' in G.deactivated_adjacencies['B1']), testop.format(9, 'B should not have an active adjacency to Q')
-        assert('Q1' not in G.active_adjacencies['C1']), testop.format(9, 'C should no longer have an active edge to Q')
-        assert('Q1' not in G.active_adjacencies['P1']), testop.format(9, 'C should not have an active edge to Q')
-        assert('Q1' in G.deactivated_adjacencies['C1']), testop.format(9, 'C should have a decativated edge to Q')
-        assert('Q1' in G.deactivated_adjacencies['P1']), testop.format(9, 'P should have a decativated edge to Q')
-        assert('C1' in G._marked_vertices), testop.format(9, 'C should be marked')
-        assert('A1' in G._marked_vertices), testop.format(9, 'A should be marked')
-        assert('P1' in G._marked_vertices), testop.format(9, 'P should be marked')
-        assert('B1' in G._marked_vertices), testop.format(9, 'B should be marked')
-        assert('Q1' not in G._marked_vertices), testop.format(9, 'Q should not be marked')
+        testNext(G, trHandle,6)
+        test_marked_vertices_6 = ['A1', 'P1']
+        test_active_adjacencies_6 = {'A1':['P2'],
+                                     'E1':['P2'],
+                                     'P2':['B1', 'C1'],
+                                    }
+        test_inactive_adjacencies_6 = {'P1':['D1']}
+        versions                    = {'P':['P2', 'P1'],
+                                       'B':['B2', 'B1'],
+                                       'C':['C1', 'C2'],
+                                       'A':['A1'],
+                                       'D':['D1'],
+                                       'E':['E1']
+                                      }
 
-
-        #ensure that all items in my list are in the graph's list as well
-        def testGraphValidity(marked,active_adjacencies,inactive_adjacency,graph):
-            # check if all marked vertices in the expected graph are in the actual graph
-            for vertex in marked:
-                if vertex not in graph._marked_vertices:
-                    print (vertex+' was not in marked vertices when it should have been')
-                    return False
-            # check if all marked vertices in the actual graph are marked in the expected graph
-            for vertex in graph._marked_vertices:
-                if vertex not in marked:
-                    print ('failure- actual vertices were not in expected vertices')
-                    return False
-
-            # check if all edges in the expected adjacencies are in the actual adjacencies 
-            for adj in active_adjacencies:
-                for vertex in active_adjacencies[adj]:
-                    
-                    if vertex not in graph.active_adjacencies[adj]:
-                        print (f'error in edge from {adj} to {vertex}')
-                        print (vertex+' was not in active adjacency when it should have')
-                        return False
-
-            # check if all edges in the graph's adjacencies are in the expected adjacencies 
-            for adj in graph.active_adjacencies:
-                for vertex in graph.active_adjacencies[adj]:
-                    if vertex not in active_adjacencies[adj]:
-                        print ('failure: actual edges were not in expected edges')
-                        print (graph.active_adjacencies)
-                        print (graph.active_adjacencies[adj],active_adjacencies[adj])
-                        return False 
-
-            # FIX THIS TOMORROW 
-            # check if all inactive edges in the expected graph are in the actual inactive edge graph
-            for adj in inactive_adjacency:
-                for vertex in inactive_adjacency[adj]:
-                    if vertex not in graph.deactivated_adjacencies[adj]:
-                        print (f'failure from edge {adj} to {vertex}')
-                        print (vertex+' was not in deactivated_adjacencies when it should have been')
-                        return False
-
-            # check if all deactivated edges in the actual graph are in the expected graph
-            for adj in graph.deactivated_adjacencies:
-                for vertex in graph.deactivated_adjacencies[adj]:
-                    if vertex not in inactive_adjacency[adj]:
-                        print (f'failure from edge of vertices {adj} to {vertex}')
-                        print ('actual deactivated adjacencies not in expected')
-                        return False
-            return True
-
-
-        # Test Op 10
-        testNext(trHandle,10)
-        test_marked_vertices_10 = ['A1','P1','B1','C1']
-        test_active_adjacencies_10 = {'P1':['B2']}
-        test_inactive_adjacencies_10 = {'A1':['P1'],
-                                     'P1':['B1','Q1'],
-                                     'B1':['B2','Q1'],
-                                     'Q1':[],
-                                     'C1':['Q1'],
-                                     'B2':[]
-                                     }
-
-        if not testGraphValidity(test_marked_vertices_10,test_active_adjacencies_10,test_inactive_adjacencies_10,G):
-            print ('Failure at step 10')
+        if not testGraphValidity(test_marked_vertices_6,test_active_adjacencies_6,test_inactive_adjacencies_6,G,
+                                 versions=versions):
+            print (G.active_adjacencies['A1'])
+            print (G.deactivated_adjacencies['A1'])
+            print (G._marked_vertices)
+            print ('Failure at step 6')
             sys.exit()
 
-        # Test Op 11
-        testNext(trHandle,11)
-        test_marked_vertices_11 = test_marked_vertices_10.copy()
-        test_active_adjacencies_11 = {}
-        test_inactive_adjacencies_11 = {'A1':['P1'],
-                                     'P1':['B1','Q1','B2'],
-                                     'B1':['B2','Q1'],
-                                     'Q1':[],
-                                     'C1':['Q1'],
-                                     'B2':[]
-                                     }
-        if not testGraphValidity(test_marked_vertices_11,test_active_adjacencies_11,test_inactive_adjacencies_11,G):
-            print ('Failure at step 11')
-            sys.exit()
-
-        # Test Op 12 - P spawn R
-        testNext(trHandle,12)
-        test_marked_vertices_12 = test_marked_vertices_11.copy()
-        test_active_adjacencies_12 = {}
-        test_inactive_adjacencies_12 = {'A1':['P1'],
-                                     'P1':['B1','Q1','B2','R1'],
-                                     'B1':['B2','Q1'],
-                                     'Q1':[],
-                                     'C1':['Q1'],
-                                     'B2':[],
-                                     'R1':[]
-                                     }
-        if not testGraphValidity(test_marked_vertices_12,test_active_adjacencies_12,test_inactive_adjacencies_12,G):
-            print ('Failure at step 12')
-            sys.exit()
-
-        # Test Op 13- R open E (read)
-        testNext(trHandle,13)
-        test_marked_vertices_13 = test_marked_vertices_12.copy()
-        test_active_adjacencies_13 = {'E1':['R1']}
-        test_inactive_adjacencies_13 = test_inactive_adjacencies_12.copy()
-        if not testGraphValidity(test_marked_vertices_13,test_active_adjacencies_13,test_inactive_adjacencies_13,G):
-            print ('Failure at step 13')
-            sys.exit()
-
-        # Test Op 14- R close E (read)
-        testNext(trHandle,14)
-        test_marked_vertices_14 = ['A1','E1','P1','B1','C1']
-        test_active_adjacencies_14 = {}
-        test_inactive_adjacencies_14 = test_inactive_adjacencies_13.copy()
-        test_inactive_adjacencies_14['E1'] = ['R1']
-        if not testGraphValidity(test_marked_vertices_14,test_active_adjacencies_14,test_inactive_adjacencies_14,G):
-            print ('Failure at step 14')
-            sys.exit()
-
-        # Test Op 15- R open B (read)
-        testNext(trHandle,15)
-        test_marked_vertices_15 = test_marked_vertices_14.copy()
-        test_active_adjacencies_15 = {'B2':['R1']}
-        test_inactive_adjacencies_15 = test_inactive_adjacencies_14.copy()
-        if not testGraphValidity(test_marked_vertices_15,test_active_adjacencies_15,test_inactive_adjacencies_15,G):
-            print ('Failure at step 15')
-            sys.exit()
-
-        # Test Op 16- R close B (read)
-        testNext(trHandle,16)
-        test_marked_vertices_16 = ['A1','E1','P1','B2','B1','C1']
-        test_active_adjacencies_16 = {}
-        test_inactive_adjacencies_16 = test_inactive_adjacencies_15.copy()
-        test_inactive_adjacencies_16['B2'] = ['R1']
-        if not testGraphValidity(test_marked_vertices_16,test_active_adjacencies_16,test_inactive_adjacencies_16,G):
-            print ('Failure at step 16')
-            sys.exit()
-
-        # Test Op 17 - Q open D for write
-        testNext(trHandle,17)
-        test_marked_vertices_17 = test_marked_vertices_16.copy()
-        test_active_adjacencies_17 = {'Q1':['D1']}
-        test_inactive_adjacencies_17 = test_inactive_adjacencies_16.copy()
-        if not testGraphValidity(test_marked_vertices_17,test_active_adjacencies_17,test_inactive_adjacencies_17,G):
-            print ('Failure at step 17')
-            sys.exit()
-
-        testNext(trHandle,18)
-        test_marked_vertices_18 = ['A1','E1','P1','B2','B1','C1','Q1']
-        test_active_adjacencies_18 = {}
-        test_inactive_adjacencies_18 = test_inactive_adjacencies_16.copy()
-        test_inactive_adjacencies_18['Q1'] = ['D1']
-        if not testGraphValidity(test_marked_vertices_18,test_active_adjacencies_18,test_inactive_adjacencies_18,G):
-            print ('Failure at step 18')
-            sys.exit()
-
-        testNext(trHandle,19)
-        test_marked_vertices_19 = test_marked_vertices_18.copy()
-        test_active_adjacencies_19 = {'R1':['F1']}
-        test_inactive_adjacencies_19 = test_inactive_adjacencies_18.copy()
-        if not testGraphValidity(test_marked_vertices_19,test_active_adjacencies_19,test_inactive_adjacencies_19,G):
-            print ('Failure at step 19')
-            sys.exit()
-
-        testNext(trHandle,20)
-        test_marked_vertices_20 = ['A1','E1','P1','B2','B1','C1','Q1','R1']
-        test_active_adjacencies_20 = {}
-        test_inactive_adjacencies_20 = test_inactive_adjacencies_19.copy()
-        test_inactive_adjacencies_20['R1'] = ['F1']
-        if not testGraphValidity(test_marked_vertices_20,test_active_adjacencies_20,test_inactive_adjacencies_20,G):
-            print ('Failure at step 20')
-            sys.exit()
+        
