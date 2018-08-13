@@ -1,0 +1,5 @@
+P open B write
+P open A read
+Q open A write
+P close B write
+Z open A write
